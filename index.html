@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Экран 2. Эволюционные пути</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #38bdf8; --pink: #f472b6; --purple: #a78bfa; --green: #22c55e; --red: #ef4444; --yellow: #eab308;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 10px; overflow: hidden;
+  }
+  #app {
+    width: 100%; max-width: 850px; height: 600px; background: var(--panel);
+    border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    position: relative; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; z-index: 10;}
+  h2 { margin: 0; font-size: 18px; }
+  
+  .hint { font-size: 14px; color: var(--accent); margin-bottom: 10px; font-weight: bold; height: 20px; transition: 0.3s; text-align: center;}
+  
+  /* Сцена */
+  .stage { position: relative; flex: 1; background: #061021; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
+  
+  /* Выбор бактерий */
+  .bacteria-selector {
+    position: absolute; inset: 0; display: flex; justify-content: space-around;
+    align-items: center; padding: 0 40px; transition: opacity 0.8s; z-index: 2;
+  }
+  .bacteria-selector.hidden { opacity: 0; pointer-events: none; }
+  
+  .bact-card {
+    cursor: pointer; transition: transform 0.3s, filter 0.3s;
+    display: flex; flex-direction: column; align-items: center; gap: 15px;
+    pointer-events: none;
+  }
+  .bact-card.active { pointer-events: auto; }
+  .bact-card.active:hover { transform: scale(1.05); filter: drop-shadow(0 0 20px var(--accent)); }
+  .bact-card.blue.active:hover { filter: drop-shadow(0 0 20px #38bdf8); }
+  .bact-card.green.active:hover { filter: drop-shadow(0 0 20px #22c55e); }
+  
+  .bact-name { font-size: 16px; font-weight: bold; text-align: center; }
+  .bact-desc { font-size: 12px; color: var(--muted); max-width: 200px; text-align: center; margin-top: -5px;}
+
+  /* Анимация жгутиков в карточках */
+  .flagella-card-group { transition: 1.5s ease-in-out; transform-origin: center; }
+  .bact-card.broken .flagella-card-group { opacity: 0; transform: scale(0.5) translateX(50px); filter: blur(5px); }
+  .bact-card.healed .flagella-card-group { opacity: 1; transform: scale(1) translateX(0); filter: blur(0); }
+
+  /* Одна бактерия (для зума) */
+  #bacterium-wrapper {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 1s;
+    display: flex; align-items: center; justify-content: center;
+    width: 500px; height: 300px; opacity: 0; pointer-events: none; z-index: 5;
+  }
+  #bacterium-wrapper.zoomed { transform: translate(-50%, -50%) scale(5); opacity: 0; pointer-events: none; }
+  #bacterium-wrapper.active { opacity: 1; pointer-events: auto; }
+  
+  /* Перекрашивание бактерии в зеленый */
+  #bacterium-wrapper.is-green .bact-body-fill { fill: #15803d; }
+  #bacterium-wrapper.is-green .bact-body-stroke { stroke: #22c55e; }
+  #bacterium-wrapper.is-green .bact-flagella { stroke: #22c55e; }
+  #bacterium-wrapper.is-green .bact-pili { stroke: #22c55e; }
+  
+  .flagella-group { transition: 1.5s ease-in-out; transform-origin: 250px 150px; }
+  #bacterium-wrapper.broken .flagella-group { opacity: 0; transform: scale(0.3) translateX(100px); filter: blur(5px); }
+  #bacterium-wrapper.healed .flagella-group { opacity: 1; transform: scale(1) translateX(0); filter: blur(0); stroke: var(--purple); }
+
+  /* ДНК */
+  #dna-view {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0; transition: 1.2s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%;
+    justify-content: center; z-index: 10;
+  }
+  #dna-view.zoomed { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+
+  .dna-spiral {
+    position: relative; width: 100px; height: 400px;
+    transform-style: preserve-3d;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    transform: rotateY(-20deg);
+  }
+
+  .rung { position: relative; width: 100%; height: 20px; display: flex; justify-content: space-between; align-items: center; transform-style: preserve-3d; }
+
+  .rung-line {
+    position: absolute; left: 10%; right: 10%; height: 4px;
+    background: linear-gradient(90deg, var(--pink), var(--purple), var(--accent));
+    border-radius: 2px; opacity: 0.8; box-shadow: 0 0 8px rgba(167, 139, 250, 0.5); transition: 0.5s;
+  }
+
+  .bead {
+    width: 24px; height: 24px; border-radius: 50%;
+    box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 10px currentColor;
+    z-index: 2; position: relative; transition: all 0.5s ease;
+  }
+  .bead.left { background: radial-gradient(circle at 30% 30%, #fbcfe8, var(--pink)); color: var(--pink); }
+  .bead.right { background: radial-gradient(circle at 30% 30%, #bae6fd, var(--accent)); color: var(--accent); }
+
+  .pos-1 .bead.left { transform: translateZ(40px); } .pos-1 .bead.right { transform: translateZ(-40px); }
+  .pos-2 .bead.left { transform: translateZ(20px) translateX(10px); } .pos-2 .bead.right { transform: translateZ(-20px) translateX(-10px); }
+  .pos-3 .bead.left { transform: translateZ(-20px) translateX(15px); } .pos-3 .bead.right { transform: translateZ(20px) translateX(-15px); }
+  .pos-4 .bead.left { transform: translateZ(-40px); } .pos-4 .bead.right { transform: translateZ(40px); }
+  .pos-5 .bead.left { transform: translateZ(-20px) translateX(-15px); } .pos-5 .bead.right { transform: translateZ(20px) translateX(15px); }
+  .pos-6 .bead.left { transform: translateZ(20px) translateX(-10px); } .pos-6 .bead.right { transform: translateZ(-20px) translateX(10px); }
+  .pos-7 .bead.left { transform: translateZ(40px); } .pos-7 .bead.right { transform: translateZ(-40px); }
+
+  /* ГЕН ЖГУТИКА */
+  .target .rung-line { background: #475569; box-shadow: none; transition: 1s; }
+  .target .bead { cursor: pointer; animation: pulse-red 2s infinite; }
+  @keyframes pulse-red { 0%, 100% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 15px var(--red); } 50% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 30px var(--red); } }
+  .target.crispr-cut .bead { opacity: 0.3; box-shadow: none; animation: none; cursor: default; background: #475569; color: transparent; }
+  .target.crispr-cut .rung-line { opacity: 0.2; background: #475569; }
+  .target.healed-gene .bead { opacity: 1; background: radial-gradient(circle at 30% 30%, #d8b4fe, #8b5cf6); color: #8b5cf6; box-shadow: 0 0 25px #8b5cf6; animation: pulse-healed 2s infinite; }
+  @keyframes pulse-healed { 0%, 100% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 15px #8b5cf6; } 50% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 35px #8b5cf6; } }
+  .target.healed-gene .rung-line { background: #8b5cf6; box-shadow: 0 0 10px #8b5cf6; opacity: 1; }
+
+  /* ГЕНЫ СПАСЕНИЯ */
+  .nitrogen-gene, .adenylate-gene { pointer-events: none; }
+  .nitrogen-gene .bead, .adenylate-gene .bead { opacity: 0.3; filter: grayscale(1); transition: all 0.5s; }
+  .nitrogen-gene .rung-line, .adenylate-gene .rung-line { opacity: 0.3; background: #475569; box-shadow: none; transition: all 0.5s; }
+
+  .nitrogen-gene.active { pointer-events: auto; cursor: pointer; }
+  .nitrogen-gene.active .bead { opacity: 1; filter: none; background: radial-gradient(circle at 30% 30%, #bbf7d0, #22c55e); color: var(--green); box-shadow: 0 0 20px var(--green); animation: pulse-green 1.5s infinite; }
+  .nitrogen-gene.active .rung-line { opacity: 1; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  @keyframes pulse-green { 0%, 100% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 15px var(--green); } 50% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 35px var(--green); } }
+
+  .adenylate-gene.active { pointer-events: auto; cursor: pointer; }
+  .adenylate-gene.active .bead { opacity: 1; filter: none; background: radial-gradient(circle at 30% 30%, #fde047, #eab308); color: var(--yellow); box-shadow: 0 0 20px var(--yellow); animation: pulse-yellow 1.5s infinite; }
+  .adenylate-gene.active .rung-line { opacity: 1; background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  @keyframes pulse-yellow { 0%, 100% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 15px var(--yellow); } 50% { box-shadow: inset -4px -4px 6px rgba(0,0,0,0.5), 0 0 35px var(--yellow); } }
+
+  /* Промотор и Белок */
+  .promoter-ring { position: absolute; inset: -15px; border-radius: 50px; border: 2px dashed var(--accent); opacity: 0; transition: 0.5s; pointer-events: none; z-index: 5; }
+  .promoter-ring.show { opacity: 1; }
+  .promoter-ring.active { border-color: var(--purple); border-style: solid; background: rgba(167,139,250,0.1); box-shadow: 0 0 20px var(--purple); }
+  .flying-protein { position: absolute; width: 20px; height: 20px; border-radius: 50%; opacity: 0; pointer-events: none; transition: all 1s ease-in-out; z-index: 20; }
+  
+  /* Ножницы */
+  .crispr-scissors { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0); font-size: 40px; z-index: 100; pointer-events: none; opacity: 0; transition: 0.3s; filter: drop-shadow(0 0 10px var(--red)); }
+  .crispr-scissors.active { transform: translate(-50%, -50%) scale(1.5) rotate(180deg); opacity: 1; }
+
+  /* Модалка триплета */
+  .triplet-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(15, 23, 42, 0.98); border: 2px solid var(--purple); border-radius: 16px; padding: 30px; text-align: center; opacity: 0; pointer-events: none; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 50; box-shadow: 0 0 40px rgba(167, 139, 250, 0.3); }
+  .triplet-modal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  .triplet-title { margin-bottom: 20px; font-size: 18px; font-weight: bold; color: var(--accent); }
+  .triplet-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .nucleotide { width: 50px; height: 50px; border-radius: 50%; background: #334155; border: 2px solid #475569; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; transition: 0.3s; cursor: default; }
+  .nucleotide.clickable { cursor: pointer; border-color: var(--accent); animation: pulse-nuc 2s infinite; }
+  .nucleotide.clickable:hover { background: #475569; transform: scale(1.1); }
+  @keyframes pulse-nuc { 0%, 100% { box-shadow: 0 0 0 0 rgba(56,189,248,0.5); } 50% { box-shadow: 0 0 0 10px rgba(56,189,248,0); } }
+  .bond-horizontal { width: 30px; height: 6px; background: linear-gradient(90deg, var(--pink), var(--accent)); border-radius: 3px; }
+  .btn-close-modal { background: var(--accent); color: #000; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s; }
+  .btn-close-modal:hover { background: #fff; }
+
+  /* Всплывашки */
+  .explanation-popup { position: absolute; top: 20px; left: 50%; transform: translateX(-50%) translateY(-20px); background: rgba(15, 23, 42, 0.95); border: 1px solid var(--accent); border-radius: 12px; padding: 15px; color: var(--text); font-size: 14px; width: 80%; max-width: 500px; text-align: center; opacity: 0; transition: 0.5s; pointer-events: none; z-index: 50; }
+  .explanation-popup.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #final-alert { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: rgba(15, 23, 42, 0.95); border: 2px solid var(--green); border-radius: 16px; padding: 20px 30px; text-align: center; opacity: 0; pointer-events: none; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 30; width: 80%; max-width: 450px; }
+  #final-alert.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  #final-alert h3 { color: var(--green); margin: 0 0 10px 0; font-size: 22px; }
+  #final-alert p { margin: 0 0 15px 0; font-size: 15px; line-height: 1.5; }
+  #final-alert button { background: var(--green); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s; }
+  #final-alert button:hover { filter: brightness(1.2); }
+
+  #flash { position: absolute; inset: 0; background: var(--purple); opacity: 0; pointer-events: none; z-index: 15; transition: 0.5s; }
+  #flash.active { opacity: 0.3; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="header">
+    <h2>Экран 2. Эволюционные пути</h2>
+  </div>
+  
+  <div class="hint" id="hintText">Шаг 1: Нажмите на ЗЕЛЕНУЮ бактерию, чтобы изменить нуклеотид.</div>
+  
+  <div class="stage" id="stage">
+    <div id="flash"></div>
+    
+    <!-- ВЫБОР БАКТЕРИЙ -->
+    <div class="bacteria-selector" id="bact-selector">
+      <div class="bact-card blue" id="card-blue">
+        <svg viewBox="0 0 500 300" width="250" height="150">
+          <defs>
+            <radialGradient id="blueGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#9d174d" /><stop offset="40%" stop-color="#6b21a8" />
+              <stop offset="80%" stop-color="#0ea5e9" /><stop offset="100%" stop-color="#38bdf8" />
+            </radialGradient>
+            <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+          </defs>
+          <g class="flagella-card-group" fill="none" stroke="#38bdf8" stroke-linecap="round">
+            <path d="M 320 150 Q 400 110, 480 60" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 420 140, 490 100" stroke-width="2" opacity="0.6"/>
+            <path d="M 320 150 Q 410 180, 480 220" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 430 160, 490 180" stroke-width="1.5" opacity="0.5"/>
+          </g>
+          <g stroke="#38bdf8" stroke-width="1.5" opacity="0.6">
+            <line x1="120" y1="90" x2="115" y2="70" /><line x1="150" y1="80" x2="145" y2="60" /><line x1="180" y1="75" x2="175" y2="55" />
+            <line x1="210" y1="75" x2="205" y2="55" /><line x1="240" y1="75" x2="245" y2="55" /><line x1="270" y1="80" x2="275" y2="60" />
+            <line x1="120" y1="210" x2="115" y2="230" /><line x1="150" y1="220" x2="145" y2="240" /><line x1="180" y1="225" x2="175" y2="245" />
+            <line x1="210" y1="225" x2="205" y2="245" /><line x1="240" y1="225" x2="245" y2="245" /><line x1="270" y1="220" x2="275" y2="240" />
+          </g>
+          <rect x="100" y="75" width="240" height="150" rx="75" fill="url(#blueGrad)" filter="url(#glow-blue)" stroke="#38bdf8" stroke-width="2" />
+          <g stroke="#f472b6" stroke-width="1.5" opacity="0.3">
+            <path d="M 120 120 Q 140 100, 160 130 T 200 120 T 240 130 T 280 110 T 310 130" fill="none" />
+            <path d="M 110 150 Q 140 170, 160 140 T 200 160 T 250 140 T 290 160 T 320 150" fill="none" />
+          </g>
+          <rect x="115" y="85" width="210" height="40" rx="20" fill="rgba(255,255,255,0.15)" />
+        </svg>
+        <div class="bact-name" style="color: #38bdf8;">Штамм AR2</div>
+        <div class="bact-desc">Обычная ДНК (УУУ)</div>
+      </div>
+
+      <div class="bact-card green" id="card-green">
+        <svg viewBox="0 0 500 300" width="250" height="150">
+          <defs>
+            <radialGradient id="greenGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#9d174d" /><stop offset="40%" stop-color="#15803d" />
+              <stop offset="80%" stop-color="#22c55e" /><stop offset="100%" stop-color="#bbf7d0" />
+            </radialGradient>
+            <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+          </defs>
+          <g class="flagella-card-group" fill="none" stroke="#22c55e" stroke-linecap="round">
+            <path d="M 320 150 Q 400 110, 480 60" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 420 140, 490 100" stroke-width="2" opacity="0.6"/>
+            <path d="M 320 150 Q 410 180, 480 220" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 430 160, 490 180" stroke-width="1.5" opacity="0.5"/>
+          </g>
+          <g stroke="#22c55e" stroke-width="1.5" opacity="0.6">
+            <line x1="120" y1="90" x2="115" y2="70" /><line x1="150" y1="80" x2="145" y2="60" /><line x1="180" y1="75" x2="175" y2="55" />
+            <line x1="210" y1="75" x2="205" y2="55" /><line x1="240" y1="75" x2="245" y2="55" /><line x1="270" y1="80" x2="275" y2="60" />
+            <line x1="120" y1="210" x2="115" y2="230" /><line x1="150" y1="220" x2="145" y2="240" /><line x1="180" y1="225" x2="175" y2="245" />
+            <line x1="210" y1="225" x2="205" y2="245" /><line x1="240" y1="225" x2="245" y2="245" /><line x1="270" y1="220" x2="275" y2="240" />
+          </g>
+          <rect x="100" y="75" width="240" height="150" rx="75" fill="url(#greenGrad)" filter="url(#glow-green)" stroke="#22c55e" stroke-width="2" />
+          <g stroke="#f472b6" stroke-width="1.5" opacity="0.3">
+            <path d="M 120 120 Q 140 100, 160 130 T 200 120 T 240 130 T 280 110 T 310 130" fill="none" />
+            <path d="M 110 150 Q 140 170, 160 140 T 200 160 T 250 140 T 290 160 T 320 150" fill="none" />
+          </g>
+          <rect x="115" y="85" width="210" height="40" rx="20" fill="rgba(255,255,255,0.15)" />
+        </svg>
+        <div class="bact-name" style="color: #22c55e;">Штамм Pf0-2x</div>
+        <div class="bact-desc">Мутация (УУЦ)</div>
+      </div>
+    </div>
+
+    <!-- ОДНА БАКТЕРИЯ -->
+    <div id="bacterium-wrapper">
+      <svg viewBox="0 0 500 300" width="500" height="300">
+        <defs>
+          <radialGradient id="bodyGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#9d174d" /><stop offset="40%" stop-color="#6b21a8" />
+            <stop offset="80%" stop-color="#0ea5e9" /><stop offset="100%" stop-color="#38bdf8" />
+          </radialGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <g class="flagella-group bact-flagella" fill="none" stroke="#38bdf8" stroke-linecap="round">
+          <path d="M 320 150 Q 400 110, 480 60" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 420 140, 490 100" stroke-width="2" opacity="0.6"/>
+          <path d="M 320 150 Q 410 180, 480 220" stroke-width="2.5" opacity="0.7"/><path d="M 320 150 Q 390 200, 460 260" stroke-width="1.5" opacity="0.5"/>
+          <path d="M 320 150 Q 430 160, 490 180" stroke-width="1.5" opacity="0.5"/>
+        </g>
+        <g stroke="#38bdf8" stroke-width="1.5" opacity="0.6" class="bact-pili">
+          <line x1="120" y1="90" x2="115" y2="70" /><line x1="150" y1="80" x2="145" y2="60" /><line x1="180" y1="75" x2="175" y2="55" />
+          <line x1="210" y1="75" x2="205" y2="55" /><line x1="240" y1="75" x2="245" y2="55" /><line x1="270" y1="80" x2="275" y2="60" />
+          <line x1="300" y1="90" x2="305" y2="70" /><line x1="120" y1="210" x2="115" y2="230" /><line x1="150" y1="220" x2="145" y2="240" />
+          <line x1="180" y1="225" x2="175" y2="245" /><line x1="210" y1="225" x2="205" y2="245" /><line x1="240" y1="225" x2="245" y2="245" />
+          <line x1="270" y1="220" x2="275" y2="240" /><line x1="300" y1="210" x2="305" y2="230" />
+        </g>
+        <rect x="100" y="75" width="240" height="150" rx="75" fill="url(#bodyGrad)" filter="url(#glow)" stroke="#38bdf8" stroke-width="2" class="bact-body-fill bact-body-stroke" />
+        <g stroke="#f472b6" stroke-width="1.5" opacity="0.3">
+          <path d="M 120 120 Q 140 100, 160 130 T 200 120 T 240 130 T 280 110 T 310 130" fill="none" />
+          <path d="M 110 150 Q 140 170, 160 140 T 200 160 T 250 140 T 290 160 T 320 150" fill="none" />
+        </g>
+        <rect x="115" y="85" width="210" height="40" rx="20" fill="rgba(255,255,255,0.15)" />
+      </svg>
+    </div>
+
+    <!-- ДНК -->
+    <div id="dna-view">
+      <div class="crispr-scissors" id="scissors">✂️</div>
+      <div class="dna-spiral">
+        <div class="rung pos-1"><div class="rung-line"></div><div class="bead left"></div><div class="bead right"></div></div>
+        
+        <div class="rung nitrogen-gene pos-2 active" id="nitrogen-gene" title="Ген азотного обмена">
+          <div class="rung-line"></div>
+          <div class="bead left"></div><div class="bead right"></div>
+        </div>
+        
+        <div class="rung pos-3"><div class="rung-line"></div><div class="bead left"></div><div class="bead right"></div></div>
+        
+        <div class="rung target pos-4" id="target-gene" title="Ген жгутика">
+          <div class="rung-line"></div>
+          <div class="bead left"></div><div class="bead right"></div>
+          <div class="promoter-ring" id="promoter-spot" title="Промотор жгутика"></div>
+        </div>
+
+        <div class="flying-protein" id="flying-protein"></div>
+
+        <div class="rung pos-5"><div class="rung-line"></div><div class="bead left"></div><div class="bead right"></div></div>
+        
+        <div class="rung adenylate-gene pos-6" id="adenylate-gene" title="Аденилатциклаза">
+          <div class="rung-line"></div>
+          <div class="bead left"></div><div class="bead right"></div>
+        </div>
+
+        <div class="rung pos-7"><div class="rung-line"></div><div class="bead left"></div><div class="bead right"></div></div>
+      </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО ТРИПЛЕТА -->
+    <div class="triplet-modal" id="triplet-modal">
+      <div class="triplet-title">Триплет нуклеотидов</div>
+      <div class="triplet-row">
+        <div class="nucleotide">У</div>
+        <div class="bond-horizontal"></div>
+        <div class="nucleotide">У</div>
+        <div class="bond-horizontal"></div>
+        <div class="nucleotide clickable" id="nuc-third">У</div>
+      </div>
+      <button class="btn-close-modal" id="btn-close-modal">Закрыть</button>
+    </div>
+
+    <div class="explanation-popup" id="expPopup"></div>
+
+    <div id="final-alert">
+      <h3>🎉 Эксперимент завершен!</h3>
+      <p id="final-text">Обе бактерии спасли жгутики! Но <b>Pf0-2x</b> (зеленая) использовала ген аденилатциклазы и пошла по другому пути!</p>
+      <button onclick="location.reload()">Пройти заново</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const stage = document.getElementById('stage');
+  const bactSelector = document.getElementById('bact-selector');
+  const cardBlue = document.getElementById('card-blue');
+  const cardGreen = document.getElementById('card-green');
+  const wrapper = document.getElementById('bacterium-wrapper');
+  const dnaView = document.getElementById('dna-view');
+  const hint = document.getElementById('hintText');
+  const nitrogenGene = document.getElementById('nitrogen-gene');
+  const adenylateGene = document.getElementById('adenylate-gene');
+  const targetGene = document.getElementById('target-gene');
+  const scissors = document.getElementById('scissors');
+  const flash = document.getElementById('flash');
+  const tripletModal = document.getElementById('triplet-modal');
+  const nucThird = document.getElementById('nuc-third');
+  const btnCloseModal = document.getElementById('btn-close-modal');
+  const expPopup = document.getElementById('expPopup');
+  const finalAlert = document.getElementById('final-alert');
+  const promoterSpot = document.getElementById('promoter-spot');
+  const flyingProtein = document.getElementById('flying-protein');
+  const finalText = document.getElementById('final-text');
+
+  let step = 0; 
+  let currentStrain = null;
+  let tripletChanged = false;
+
+  // СТРОГАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ
+  function step1_activateGreen() {
+    cardGreen.classList.add('active');
+    cardGreen.onclick = () => {
+      if (step === 0) { currentStrain = 'green'; enterForInspection(); }
+    };
+  }
+
+  function step2_activateBlueDeletion() {
+    cardBlue.classList.add('active');
+    cardBlue.onclick = () => {
+      if (step === 3) { currentStrain = 'blue'; startDeletion(); }
+    };
+  }
+
+  function step3_activateGreenDeletion() {
+    cardGreen.classList.add('active');
+    cardGreen.onclick = () => {
+      if (step === 3) { currentStrain = 'green'; startDeletion(); }
+    };
+  }
+
+  function step4_activateBlueHealing() {
+    cardBlue.classList.add('active');
+    cardBlue.onclick = () => {
+      if (step === 6) { currentStrain = 'blue'; startHealing(); }
+    };
+  }
+
+  function step5_activateGreenHealing() {
+    cardGreen.classList.add('active');
+    cardGreen.onclick = () => {
+      if (step === 6) { currentStrain = 'green'; startHealing(); }
+    };
+  }
+
+  function disableAllCards() {
+    cardBlue.classList.remove('active');
+    cardGreen.classList.remove('active');
+    cardBlue.onclick = null;
+    cardGreen.onclick = null;
+  }
+
+  // ИНИЦИАЛИЗАЦИЯ
+  step1_activateGreen();
+  hint.textContent = "Шаг 1: Нажмите на ЗЕЛЕНУЮ бактерию, чтобы изменить нуклеотид.";
+
+  // ОСМОТР (Мутация)
+  function enterForInspection() {
+    step = 1;
+    disableAllCards();
+    bactSelector.classList.add('hidden');
+    hint.textContent = "Нажмите на зеленый ген азотного обмена, чтобы рассмотреть его.";
+    setTimeout(() => { dnaView.classList.add('zoomed'); }, 300);
+  }
+
+  nitrogenGene.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (step !== 1) return;
+    step = 2;
+    
+    nucThird.textContent = 'У';
+    nucThird.style.background = '';
+    nucThird.style.borderColor = '';
+    nucThird.classList.add('clickable');
+    
+    tripletModal.classList.add('show');
+  });
+
+  nucThird.addEventListener('click', () => {
+    if (tripletChanged) return;
+    nucThird.textContent = 'Ц';
+    nucThird.style.background = 'var(--purple)';
+    nucThird.style.borderColor = 'var(--purple)';
+    tripletChanged = true;
+    hint.textContent = "Мутация! Триплет изменился на УУЦ.";
+  });
+
+  btnCloseModal.addEventListener('click', () => {
+    tripletModal.classList.remove('show');
+    expPopup.textContent = "Вы изменили Pf0-2x на УУЦ!";
+    expPopup.classList.add('show');
+    
+    setTimeout(() => { 
+      expPopup.classList.remove('show'); 
+      dnaView.classList.remove('zoomed');
+      
+      setTimeout(() => {
+        bactSelector.classList.remove('hidden');
+        hint.textContent = "Шаг 2: Теперь удалите жгутик у ГОЛУБОЙ бактерии.";
+        step = 3;
+        step2_activateBlueDeletion();
+      }, 600);
+    }, 2500);
+  });
+
+  // УДАЛЕНИЕ
+  function startDeletion() {
+    disableAllCards();
+    bactSelector.classList.add('hidden');
+    
+    // Перекрашиваем бактерию, если она зеленая
+    if (currentStrain === 'green') {
+      wrapper.classList.add('is-green');
+    } else {
+      wrapper.classList.remove('is-green');
+    }
+    
+    setTimeout(() => { 
+      dnaView.classList.add('zoomed'); 
+      hint.textContent = "Нажмите на красный ген, чтобы вырезать его.";
+    }, 300);
+  }
+
+  targetGene.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (step !== 3) return;
+    step = 4;
+    
+    scissors.classList.add('active');
+    flash.classList.add('active');
+    
+    setTimeout(() => {
+      flash.classList.remove('active');
+      scissors.classList.remove('active');
+      targetGene.classList.add('crispr-cut');
+      
+      setTimeout(() => {
+        dnaView.classList.remove('zoomed');
+        setTimeout(() => {
+          wrapper.classList.add('active');
+          wrapper.classList.add('broken');
+          
+          setTimeout(() => {
+            wrapper.classList.remove('active');
+            setTimeout(() => { targetGene.classList.remove('crispr-cut'); }, 500);
+
+            if (currentStrain === 'blue') {
+              cardBlue.classList.add('broken');
+              bactSelector.classList.remove('hidden');
+              hint.textContent = "Шаг 3: Теперь удалите жгутик у ЗЕЛЕНОЙ бактерии.";
+              step = 3;
+              step3_activateGreenDeletion();
+            } else {
+              cardGreen.classList.add('broken');
+              bactSelector.classList.remove('hidden');
+              hint.textContent = "Шаг 4: У обеих бактерий нет жгутиков! Нажмите на ГОЛУБУЮ для восстановления.";
+              step = 6;
+              step4_activateBlueHealing();
+            }
+            
+          }, 2000);
+        }, 800);
+      }, 1500);
+    }, 400);
+  });
+
+  // СПАСЕНИЕ
+  function startHealing() {
+    disableAllCards();
+    bactSelector.classList.add('hidden');
+    
+    // Перекрашиваем бактерию, если она зеленая
+    if (currentStrain === 'green') {
+      wrapper.classList.add('is-green');
+    } else {
+      wrapper.classList.remove('is-green');
+    }
+    
+    setTimeout(() => { 
+      dnaView.classList.add('zoomed'); 
+      
+      if (currentStrain === 'blue') {
+        nitrogenGene.classList.add('active');
+        hint.textContent = "Светится ген азота. Нажмите на него.";
+      } else {
+        adenylateGene.classList.add('active');
+        hint.textContent = "Ген азота не светится! Нажмите на желтый ген внизу.";
+      }
+      promoterSpot.classList.add('show');
+    }, 300);
+  }
+
+  function handleGeneHealing(geneElement, proteinColor) {
+    flyingProtein.style.background = proteinColor;
+    flyingProtein.style.boxShadow = `0 0 15px ${proteinColor}`;
+    flyingProtein.style.opacity = 1;
+    
+    if (geneElement === nitrogenGene) {
+      flyingProtein.style.left = '50%'; flyingProtein.style.top = '30%';
+    } else {
+      flyingProtein.style.left = '50%'; flyingProtein.style.top = '70%';
+    }
+
+    setTimeout(() => {
+      flyingProtein.style.left = '50%';
+      flyingProtein.style.top = '50%';
+      flyingProtein.style.transform = 'scale(1.5)';
+    }, 100);
+
+    setTimeout(() => {
+      flyingProtein.style.opacity = 0;
+      promoterSpot.classList.add('active');
+      flash.classList.add('active');
+      
+      setTimeout(() => flash.classList.remove('active'), 500);
+
+      setTimeout(() => {
+        targetGene.classList.remove('crispr-cut');
+        targetGene.classList.add('healed-gene');
+        
+        setTimeout(() => {
+          dnaView.classList.remove('zoomed');
+          setTimeout(() => {
+            wrapper.classList.add('active');
+            wrapper.classList.remove('broken');
+            wrapper.classList.add('healed'); 
+            
+            if (currentStrain === 'blue') {
+              cardBlue.classList.remove('broken');
+              cardBlue.classList.add('healed');
+            } else {
+              cardGreen.classList.remove('broken');
+              cardGreen.classList.add('healed');
+            }
+            
+            setTimeout(() => {
+              // Восстанавливаем гены для следующего шага
+              nitrogenGene.classList.remove('active');
+              adenylateGene.classList.remove('active');
+              promoterSpot.classList.remove('show');
+              promoterSpot.classList.remove('active');
+              targetGene.classList.remove('healed-gene');
+              
+              wrapper.classList.remove('active');
+              
+              if (currentStrain === 'blue') {
+                bactSelector.classList.remove('hidden');
+                hint.textContent = "Шаг 5: Жгутик голубой восстановлен! Нажмите на ЗЕЛЕНУЮ бактерию.";
+                step = 6;
+                step5_activateGreenHealing();
+              } else {
+                // ФИНАЛ: Ждем 2 секунды, чтобы анимация жгутика проигралась, и показываем окно
+                setTimeout(() => {
+                  finalText.innerHTML = "Обе бактерии спасли жгутики! Но <b>Pf0-2x</b> (зеленая) использовала ген аденилатциклазы и пошла по другому пути!";
+                  finalAlert.classList.add('show');
+                }, 2000);
+                step = 8;
+              }
+            }, 2000);
+          }, 800);
+        }, 1500);
+      }, 500);
+    }, 1200);
+  }
+
+  nitrogenGene.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (step === 6 && currentStrain === 'blue') {
+      step = 7;
+      handleGeneHealing(nitrogenGene, 'var(--green)');
+    }
+  });
+
+  adenylateGene.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (step === 6 && currentStrain === 'green') {
+      step = 7;
+      handleGeneHealing(adenylateGene, 'var(--yellow)');
+    }
+  });
+
+</script>
+</body>
+</html>
